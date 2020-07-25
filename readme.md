@@ -53,6 +53,10 @@ python train.py
     --k                      # number of tiles with highest probability to include in each slide bag
 ```
 
+##### Evaluation output:
+* `--evaluate` outputs a confusion matrix and saves a `predictions.csv` with slide name, slide target, model prediction and class probabilities (depending on loss function) for each slide in the test data.
+* if `--valid_df_path` is not specified, training data frame is randomly split into training and validation set.
+
 ## Requirements
 * python 3.8
 * pytorch 1.5.1

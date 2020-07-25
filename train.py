@@ -38,7 +38,8 @@ parser.add_argument('--cuda', type=int, help='Which GPU to use.')
 # data
 parser.add_argument('--tiles_dir', type=str, default='./data/train_images/tiles_level_1_overlap_0/')
 parser.add_argument('--stats_dir', type=str, default='./data/train_images/tiles_level_1_overlap_0/stats/')
-parser.add_argument('--df_path', type=str, default='./data/train.csv')
+parser.add_argument('--train_df_path', type=str, default='./data/train.csv')
+parser.add_argument('--valid_df_path', type=str)
 parser.add_argument('--restore_ckpt', type=str)
 parser.add_argument('--restore_encoder_ckpt', type=str)
 # training
@@ -150,8 +151,8 @@ def log_stats(preds, targets, train_loss, valid_loss, train_kappa, writer, args)
 # Data
 # --------------------
 
-def load_df(args):
-    df = pd.read_csv(args.df_path).set_index('image_id').sort_index()
+def load_df(df_path, args):
+    df = pd.read_csv(df_path).set_index('image_id').sort_index()
     df.data_provider = df.data_provider.apply(lambda x: x.strip().lower())
     if 'debug' in args.model:
         img_idxs = sorted(list(set([os.path.basename(x).split('_')[0] for x in glob.glob(args.tiles_dir + '*.png')])))
@@ -453,7 +454,7 @@ def evaluate(encoder, model, valid_dl, writer, args):
     probs_df = pd.DataFrame(probs.round(3), index=valid_df.index,
             columns=[f'prob_{i}' for i in range(probs.shape[1])] if probs.shape[1] > 1 else ['raw_pred'])
     valid_df = pd.concat([valid_df, probs_df], axis=1)
-    valid_df.to_csv(os.path.join(writer.log_dir, 'valid_preds.csv'), index=True)
+    valid_df.to_csv(os.path.join(writer.log_dir, 'predictions.csv'), index=True)
 
     # report
     print('Saved valid df with preds and probs.')
@@ -559,10 +560,13 @@ def main(args):
     if 'cuda' in args.device: torch.cuda.manual_seed(args.seed)
 
     # data
-    targets_df = load_df(args)
-    targets_df = remove_no_extractions_from_targets(targets_df, args)
-    if args.subset is not None: targets_df = targets_df.sample(args.subset)
-    train_df, valid_df = split_targets(targets_df, args)
+    train_df = load_df(args.train_df_path, args)
+    train_df = remove_no_extractions_from_targets(train_df, args)
+    if args.subset is not None: train_df = train_df.sample(args.subset)
+    if args.valid_df_path:
+        valid_df = load_df(args.valid_df_path, args)
+    else:
+        train_df, valid_df = split_targets(train_df, args)
     args.labels_mean, args.labels_std = train_df.isup_grade.mean(), train_df.isup_grade.std()
     train_ds, valid_ds = make_dataset(train_df, args), make_dataset(valid_df, args)
     valid_dl = make_dataloader(valid_ds, 'valid', args.valid_batch_size, shuffle=False, args=args)
